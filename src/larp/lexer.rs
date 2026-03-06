@@ -1,5 +1,6 @@
 #![allow(dead_code)]
-pub enum TokenType {
+#[derive(Debug, Clone)]
+pub enum TokenKind {
     Identifier(String),
     Number(f64),
     Let,
@@ -43,7 +44,7 @@ pub enum TokenType {
     Unknown
 }
 pub struct Token {
-    pub token_type: TokenType,
+    pub kind: TokenKind,
     pub span: Span,
 }
 pub struct Span {
@@ -57,8 +58,16 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
+    pub fn new(input: &str) -> Lexer<'_> {
+        Lexer { input: input, position: 0 }
+    }
+
     fn peek(&self) -> Option<char> {
         self.input[self.position..].chars().next()
+    }
+
+    pub fn end(&self) -> bool {
+        return self.position >= self.input.len();
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -71,162 +80,162 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Token {
-    while let Some(c) = self.peek() {
-        if c.is_whitespace() {
-            self.advance();
-        } else {
-            break;
-        }
-    }
-
-    let start = self.position;
-
-    if start >= self.input.len() {
-        return Token {
-            token_type: TokenType::EOF,
-            span: Span { start, end: start },
-        };
-    }
-
-    let ch = self.peek().unwrap();
-
-    if ch.is_ascii_alphabetic() || ch == '_' {
-        let mut word = String::new();
-
         while let Some(c) = self.peek() {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                word.push(c);
+            if c.is_whitespace() {
                 self.advance();
             } else {
                 break;
             }
         }
 
-        let token_type = match word.as_str() {
-            "let" => TokenType::Let,
-            "const" => TokenType::Const,
-            "if" => TokenType::If,
-            "while" => TokenType::While,
-            "for" => TokenType::For,
-            _ => TokenType::Identifier(word),
-        };
+        let start = self.position;
 
-        return Token {
-            token_type,
-            span: Span { start, end: self.position },
-        };
+        if self.end() {
+            return Token {
+                kind: TokenKind::EOF,
+                span: Span { start, end: start },
+            };
+        }
+
+        let ch = self.peek().unwrap();
+
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            let mut word = String::new();
+
+            while let Some(c) = self.peek() {
+                if c.is_ascii_alphanumeric() || c == '_' {
+                    word.push(c);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+
+            let token_type = match word.as_str() {
+                "let" => TokenKind::Let,
+                "const" => TokenKind::Const,
+                "if" => TokenKind::If,
+                "while" => TokenKind::While,
+                "for" => TokenKind::For,
+                _ => TokenKind::Identifier(word),
+            };
+
+            return Token {
+                kind: token_type,
+                span: Span { start, end: self.position },
+            };
+        }
+
+        if ch.is_ascii_digit() {
+            let mut num = String::new();
+            let mut seen_dot = false;
+
+            while let Some(c) = self.peek() {
+                if c.is_ascii_digit() {
+                    num.push(c);
+                    self.advance();
+                } else if c == '.' && !seen_dot {
+                    seen_dot = true;
+                    num.push(c);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+        
+            return Token {
+                kind: TokenKind::Number(num.parse().unwrap()),
+                span: Span { start, end: self.position },
+            };
+        }
+
+        match ch {
+            '+' => { self.advance(); Token { kind: TokenKind::Plus, span: Span { start, end: self.position } } }
+            '-' => { self.advance(); Token { kind: TokenKind::Minus, span: Span { start, end: self.position } } }
+            '*' => { self.advance(); Token { kind: TokenKind::Multiply, span: Span { start, end: self.position } } }
+            '/' => { self.advance(); Token { kind: TokenKind::Divide, span: Span { start, end: self.position } } }
+
+            '(' => { self.advance(); Token { kind: TokenKind::LPar, span: Span { start, end: self.position } } }
+            ')' => { self.advance(); Token { kind: TokenKind::RPar, span: Span { start, end: self.position } } }
+
+            '[' => { self.advance(); Token { kind: TokenKind::LSquare, span: Span { start, end: self.position } } }
+            ']' => { self.advance(); Token { kind: TokenKind::RSquare, span: Span { start, end: self.position } } }
+
+            '{' => { self.advance(); Token { kind: TokenKind::LCurly, span: Span { start, end: self.position } } }
+            '}' => { self.advance(); Token { kind: TokenKind::RCurly, span: Span { start, end: self.position } } }
+
+            ';' => { self.advance(); Token { kind: TokenKind::Semicolon, span: Span { start, end: self.position } } }
+            ':' => { self.advance(); Token { kind: TokenKind::Colon, span: Span { start, end: self.position } } }
+
+            '"' => { self.advance(); Token { kind: TokenKind::DQuote, span: Span { start, end: self.position } } }
+            '\'' => { self.advance(); Token { kind: TokenKind::Quote, span: Span { start, end: self.position } } }
+
+            '^' => { self.advance(); Token { kind: TokenKind::BXOR, span: Span { start, end: self.position } } }
+
+            '=' => {
+                self.advance();
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token { kind: TokenKind::Equal, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::Assign, span: Span { start, end: self.position } }
+                }
+            }
+
+            '>' => {
+                self.advance();
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token { kind: TokenKind::GTE, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::Greater, span: Span { start, end: self.position } }
+                }
+            }
+
+            '<' => {
+                self.advance();
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token { kind: TokenKind::LTE, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::Less, span: Span { start, end: self.position } }
+                }
+            }
+
+            '!' => {
+                self.advance();
+                if self.peek() == Some('=') {
+                    self.advance();
+                    Token { kind: TokenKind::NE, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::Not, span: Span { start, end: self.position } }
+                }
+            }
+
+            '&' => {
+                self.advance();
+                if self.peek() == Some('&') {
+                    self.advance();
+                    Token { kind: TokenKind::And, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::BAND, span: Span { start, end: self.position } }
+                }
+            }
+
+            '|' => {
+                self.advance();
+                if self.peek() == Some('|') {
+                    self.advance();
+                    Token { kind: TokenKind::Or, span: Span { start, end: self.position } }
+                } else {
+                    Token { kind: TokenKind::BOR, span: Span { start, end: self.position } }
+                }
+            }
+
+            _ => {
+                self.advance();
+                Token { kind: TokenKind::Unknown, span: Span { start, end: self.position } }
+            }
+        }
     }
-
-    if ch.is_ascii_digit() {
-        let mut num = String::new();
-        let mut seen_dot = false;
-
-        while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
-                num.push(c);
-                self.advance();
-            } else if c == '.' && !seen_dot {
-                seen_dot = true;
-                num.push(c);
-                self.advance();
-            } else {
-                break;
-            }
-    }
-
-    return Token {
-        token_type: TokenType::Number(num.parse().unwrap()),
-        span: Span { start, end: self.position },
-    };
-}
-
-    match ch {
-        '+' => { self.advance(); Token { token_type: TokenType::Plus, span: Span { start, end: self.position } } }
-        '-' => { self.advance(); Token { token_type: TokenType::Minus, span: Span { start, end: self.position } } }
-        '*' => { self.advance(); Token { token_type: TokenType::Multiply, span: Span { start, end: self.position } } }
-        '/' => { self.advance(); Token { token_type: TokenType::Divide, span: Span { start, end: self.position } } }
-
-        '(' => { self.advance(); Token { token_type: TokenType::LPar, span: Span { start, end: self.position } } }
-        ')' => { self.advance(); Token { token_type: TokenType::RPar, span: Span { start, end: self.position } } }
-
-        '[' => { self.advance(); Token { token_type: TokenType::LSquare, span: Span { start, end: self.position } } }
-        ']' => { self.advance(); Token { token_type: TokenType::RSquare, span: Span { start, end: self.position } } }
-
-        '{' => { self.advance(); Token { token_type: TokenType::LCurly, span: Span { start, end: self.position } } }
-        '}' => { self.advance(); Token { token_type: TokenType::RCurly, span: Span { start, end: self.position } } }
-
-        ';' => { self.advance(); Token { token_type: TokenType::Semicolon, span: Span { start, end: self.position } } }
-        ':' => { self.advance(); Token { token_type: TokenType::Colon, span: Span { start, end: self.position } } }
-
-        '"' => { self.advance(); Token { token_type: TokenType::DQuote, span: Span { start, end: self.position } } }
-        '\'' => { self.advance(); Token { token_type: TokenType::Quote, span: Span { start, end: self.position } } }
-
-        '^' => { self.advance(); Token { token_type: TokenType::BXOR, span: Span { start, end: self.position } } }
-
-        '=' => {
-            self.advance();
-            if self.peek() == Some('=') {
-                self.advance();
-                Token { token_type: TokenType::Equal, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::Assign, span: Span { start, end: self.position } }
-            }
-        }
-
-        '>' => {
-            self.advance();
-            if self.peek() == Some('=') {
-                self.advance();
-                Token { token_type: TokenType::GTE, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::Greater, span: Span { start, end: self.position } }
-            }
-        }
-
-        '<' => {
-            self.advance();
-            if self.peek() == Some('=') {
-                self.advance();
-                Token { token_type: TokenType::LTE, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::Less, span: Span { start, end: self.position } }
-            }
-        }
-
-        '!' => {
-            self.advance();
-            if self.peek() == Some('=') {
-                self.advance();
-                Token { token_type: TokenType::NE, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::Not, span: Span { start, end: self.position } }
-            }
-        }
-
-        '&' => {
-            self.advance();
-            if self.peek() == Some('&') {
-                self.advance();
-                Token { token_type: TokenType::And, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::BAND, span: Span { start, end: self.position } }
-            }
-        }
-
-        '|' => {
-            self.advance();
-            if self.peek() == Some('|') {
-                self.advance();
-                Token { token_type: TokenType::Or, span: Span { start, end: self.position } }
-            } else {
-                Token { token_type: TokenType::BOR, span: Span { start, end: self.position } }
-            }
-        }
-
-        _ => {
-            self.advance();
-            Token { token_type: TokenType::Unknown, span: Span { start, end: self.position } }
-        }
-    }
-}
 }
